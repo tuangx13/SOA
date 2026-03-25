@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Observability & Tracing Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-content">
+    <div class="logo">
+      <div class="logo-icon">◎</div>
+      <div>
+        <h1>Observability & Tracing</h1>
+        <p class="subtitle">OpenTelemetry · Jaeger · Microservices Demo</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a href="http://localhost:16686" target="_blank" class="btn btn-jaeger">🔍 Mở Jaeger UI</a>
+      <div class="status-dot" id="systemStatus" title="System Status"></div>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+
+<!-- SECTION 1: GIẢI THÍCH HỆ THỐNG -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">📖</span> Hệ thống hoạt động như thế nào?</h2>
+  <div class="explain-grid">
+    <div class="explain-card">
+      <div class="explain-icon">📦</div>
+      <h3>Order Service <span class="port">:3001</span></h3>
+      <p>API Gateway — Nhận request đặt hàng từ Client, điều phối gọi Inventory và Payment theo thứ tự.</p>
+      <div class="tag">Gateway</div>
+    </div>
+    <div class="explain-card">
+      <div class="explain-icon">🏭</div>
+      <h3>Inventory Service <span class="port">:3002</span></h3>
+      <p>Kiểm tra sản phẩm có trong kho hay không. Trả về thông tin: tên, giá, tồn kho.</p>
+      <div class="tag">Database</div>
+    </div>
+    <div class="explain-card">
+      <div class="explain-icon">💳</div>
+      <h3>Payment Service <span class="port">:3003</span></h3>
+      <p>Xử lý thanh toán. Tạo mã giao dịch (Transaction ID) và xác nhận thanh toán.</p>
+      <div class="tag">Payment</div>
+    </div>
+    <div class="explain-card">
+      <div class="explain-icon">🔭</div>
+      <h3>OpenTelemetry</h3>
+      <p>Auto-instrumentation tự động gắn trace vào mọi HTTP request mà <strong>không cần sửa code business logic</strong>.</p>
+      <div class="tag">Instrumentation</div>
+    </div>
+    <div class="explain-card">
+      <div class="explain-icon">📡</div>
+      <h3>Context Propagation</h3>
+      <p>Trace ID được truyền qua HTTP header <code>traceparent</code> giữa các services, tạo liên kết spans thành 1 trace.</p>
+      <div class="tag">W3C Standard</div>
+    </div>
+    <div class="explain-card">
+      <div class="explain-icon">🖥️</div>
+      <h3>Jaeger <span class="port">:16686</span></h3>
+      <p>Thu thập và hiển thị traces. Xem timeline, phát hiện lỗi (span đỏ), phân tích latency.</p>
+      <div class="tag">Tracing Backend</div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 2: ARCHITECTURE DIAGRAM -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">🏗️</span> Kiến trúc & Luồng Request</h2>
+  <div class="arch-container">
+    <div class="arch-flow">
+      <div class="arch-node client" id="nodeClient">
+        <div class="node-icon">🖥️</div>
+        <div class="node-label">Client</div>
+        <div class="node-sub">POST /order</div>
+      </div>
+      <div class="arch-arrow" id="arrow1"><div class="arrow-line"></div><div class="arrow-label">HTTP</div></div>
+      <div class="arch-node order" id="nodeOrder">
+        <div class="node-icon">📦</div>
+        <div class="node-label">Order Service</div>
+        <div class="node-sub">:3001</div>
+        <div class="node-status" id="orderStatus">idle</div>
+      </div>
+      <div class="arch-branch">
+        <div class="branch-top">
+          <div class="arch-arrow" id="arrow2"><div class="arrow-line"></div><div class="arrow-label">GET /check</div></div>
+          <div class="arch-node inventory" id="nodeInventory">
+            <div class="node-icon">🏭</div>
+            <div class="node-label">Inventory</div>
+            <div class="node-sub">:3002</div>
+            <div class="node-status" id="inventoryStatus">idle</div>
+          </div>
+        </div>
+        <div class="branch-bottom">
+          <div class="arch-arrow" id="arrow3"><div class="arrow-line"></div><div class="arrow-label">POST /pay</div></div>
+          <div class="arch-node payment" id="nodePayment">
+            <div class="node-icon">💳</div>
+            <div class="node-label">Payment</div>
+            <div class="node-sub">:3003</div>
+            <div class="node-status" id="paymentStatus">idle</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-arrow" id="arrow4"><div class="arrow-line"></div><div class="arrow-label">OTLP/HTTP</div></div>
+      <div class="arch-node jaeger" id="nodeJaeger">
+        <div class="node-icon">🔍</div>
+        <div class="node-label">Jaeger</div>
+        <div class="node-sub">:16686</div>
+      </div>
+    </div>
+    <div class="trace-propagation">
+      <div class="propagation-header">📡 Context Propagation (W3C Trace Context)</div>
+      <div class="propagation-detail">
+        <code>traceparent: 00-<span class="hl-trace">trace-id-32hex</span>-<span class="hl-span">parent-span-id-16hex</span>-<span class="hl-flag">01</span></code>
+        <div class="propagation-legend">
+          <span><span class="dot dot-trace"></span> Trace ID (định danh request)</span>
+          <span><span class="dot dot-span"></span> Parent Span ID (span cha)</span>
+          <span><span class="dot dot-flag"></span> Flags (01=sampled)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 3: DEMO CONTROL PANEL -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">🎮</span> Bảng Điều Khiển Demo</h2>
+  <div class="demo-grid">
+
+    <div class="demo-card scenario-success" onclick="runScenario('P001', 2)">
+      <div class="demo-badge success">Kịch bản 1</div>
+      <h3>✅ Happy Path</h3>
+      <p>Đặt hàng <strong>Laptop Dell XPS 15</strong> — Tất cả thành công.</p>
+      <div class="demo-detail">
+        <div><strong>Product:</strong> P001</div>
+        <div><strong>Minh họa:</strong> Trace/Span, Context Propagation</div>
+        <div><strong>Kỳ vọng:</strong> 200 OK, trace xanh hoàn chỉnh</div>
+      </div>
+      <div class="demo-action">▶ Chạy kịch bản</div>
+    </div>
+
+    <div class="demo-card scenario-error" onclick="runScenario('P999', 1)">
+      <div class="demo-badge error">Kịch bản 2</div>
+      <h3>❌ Inventory Error</h3>
+      <p>Sản phẩm <strong>P999 không tồn tại</strong> — Hết hàng.</p>
+      <div class="demo-detail">
+        <div><strong>Product:</strong> P999</div>
+        <div><strong>Minh họa:</strong> Error Detection, Root Cause</div>
+        <div><strong>Kỳ vọng:</strong> 500 Error, span đỏ tại Inventory</div>
+      </div>
+      <div class="demo-action">▶ Chạy kịch bản</div>
+    </div>
+
+    <div class="demo-card scenario-slow" onclick="runScenario('P002', 1)">
+      <div class="demo-badge slow">Kịch bản 3</div>
+      <h3>🐌 Payment Latency</h3>
+      <p>Thanh toán <strong>iPhone 15 Pro Max</strong> — Chậm 2 giây.</p>
+      <div class="demo-detail">
+        <div><strong>Product:</strong> P002</div>
+        <div><strong>Minh họa:</strong> Latency Analysis, Bottleneck</div>
+        <div><strong>Kỳ vọng:</strong> 200 OK nhưng chậm ~2.5s</div>
+      </div>
+      <div class="demo-action">▶ Chạy kịch bản</div>
+    </div>
+
+    <div class="demo-card scenario-concurrent" onclick="runConcurrent()">
+      <div class="demo-badge concurrent">Kịch bản 4</div>
+      <h3>🔄 Concurrent</h3>
+      <p>Gửi <strong>3 request đồng thời</strong> — Trace Isolation.</p>
+      <div class="demo-detail">
+        <div><strong>Products:</strong> P001 + P999 + P002</div>
+        <div><strong>Minh họa:</strong> Trace ID Isolation</div>
+        <div><strong>Kỳ vọng:</strong> 3 traces riêng biệt</div>
+      </div>
+      <div class="demo-action">▶ Chạy kịch bản</div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 4: LIVE RESULTS -->
+<section class="section" id="resultsSection" style="display:none;">
+  <h2 class="section-title"><span class="icon">📊</span> Kết quả Demo</h2>
+  <div class="results-container">
+    <!-- TIMELINE -->
+    <div class="result-panel timeline-panel">
+      <h3>⏱️ Trace Timeline (Mô phỏng)</h3>
+      <div class="timeline" id="timeline"></div>
+    </div>
+    <!-- RAW RESPONSE -->
+    <div class="result-panel">
+      <h3>📋 Response Data</h3>
+      <div class="response-tabs">
+        <button class="tab active" onclick="switchTab('formatted')">Formatted</button>
+        <button class="tab" onclick="switchTab('raw')">Raw JSON</button>
+      </div>
+      <div id="formattedView" class="response-view">
+        <div id="responseCards"></div>
+      </div>
+      <div id="rawView" class="response-view" style="display:none;">
+        <pre id="rawJson"></pre>
+      </div>
+    </div>
+    <!-- LOGS -->
+    <div class="result-panel logs-panel">
+      <h3>📝 Giải thích kết quả</h3>
+      <div id="explanation" class="explanation"></div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 5: CONCEPTUAL MAP -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">🧠</span> Bản đồ khái niệm: Kịch bản ↔ Observability</h2>
+  <div class="concept-table">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Kịch bản</th>
+          <th>Khái niệm Observability</th>
+          <th>Câu hỏi được giải đáp</th>
+          <th>Xem trên Jaeger</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-success">
+          <td>1</td>
+          <td>✅ Happy Path</td>
+          <td><span class="concept-tag">Trace/Span</span> <span class="concept-tag">Context Propagation</span></td>
+          <td>Request đi qua những service nào?</td>
+          <td>3 spans xanh, parent-child</td>
+        </tr>
+        <tr class="row-error">
+          <td>2</td>
+          <td>❌ Error</td>
+          <td><span class="concept-tag err">Error Detection</span> <span class="concept-tag err">Root Cause</span></td>
+          <td>Lỗi xảy ra ở đâu? Tại sao?</td>
+          <td>Span đỏ tại Inventory</td>
+        </tr>
+        <tr class="row-slow">
+          <td>3</td>
+          <td>🐌 Latency</td>
+          <td><span class="concept-tag warn">Latency Analysis</span> <span class="concept-tag warn">Bottleneck</span></td>
+          <td>Tại sao chậm? Chậm ở đâu?</td>
+          <td>Payment span dài ~2s</td>
+        </tr>
+        <tr class="row-concurrent">
+          <td>4</td>
+          <td>🔄 Concurrent</td>
+          <td><span class="concept-tag info">Trace Isolation</span> <span class="concept-tag info">Trace ID</span></td>
+          <td>Phân biệt request đồng thời?</td>
+          <td>3 traces riêng, ID khác nhau</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- SECTION 6: 3 PILLARS -->
+<section class="section">
+  <h2 class="section-title"><span class="icon">🏛️</span> Ba trụ cột của Observability</h2>
+  <div class="pillars">
+    <div class="pillar pillar-logs">
+      <div class="pillar-icon">📝</div>
+      <h3>Logs</h3>
+      <p class="pillar-question">"Chuyện gì đã xảy ra?"</p>
+      <ul>
+        <li>Bản ghi sự kiện chi tiết</li>
+        <li>Error messages, Debug info</li>
+        <li>VD: <code>"Order #123 failed: item not found"</code></li>
+      </ul>
+      <div class="pillar-tools">ELK Stack, Loki, Fluentd</div>
+    </div>
+    <div class="pillar pillar-metrics">
+      <div class="pillar-icon">📈</div>
+      <h3>Metrics</h3>
+      <p class="pillar-question">"Hệ thống khỏe không?"</p>
+      <ul>
+        <li>Số liệu tổng hợp theo thời gian</li>
+        <li>CPU, Memory, Latency P99, Error rate</li>
+        <li>VD: <code>"Avg response = 200ms, Error = 0.5%"</code></li>
+      </ul>
+      <div class="pillar-tools">Prometheus, Grafana, Datadog</div>
+    </div>
+    <div class="pillar pillar-traces">
+      <div class="pillar-icon">🔗</div>
+      <h3>Traces</h3>
+      <p class="pillar-question">"Request đi qua đâu?"</p>
+      <ul>
+        <li>Truy vết phân tán xuyên services</li>
+        <li>Timeline, Causality, Dependencies</li>
+        <li>VD: <code>"Order→Inv(50ms)→Pay(2000ms)"</code></li>
+      </ul>
+      <div class="pillar-tools">Jaeger, Zipkin, Tempo</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <p>SOA Demo — Observability & Tracing with OpenTelemetry + Jaeger</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

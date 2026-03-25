@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # ========================
+  # Jaeger — Distributed Tracing Backend + UI
+  # ========================
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: jaeger
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC (nhận traces từ OpenTelemetry)
+      - "4318:4318"     # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - tracing-net
+
+  # ========================
+  # Order Service — API Gateway (port 3001)
+  # ========================
+  order-service:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: order-service
+    container_name: order-service
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - OTEL_SERVICE_NAME=order-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - INVENTORY_URL=http://inventory-service:3002
+      - PAYMENT_URL=http://payment-service:3003
+      - TRACING_PATH=./shared/tracing
+      - DASHBOARD_PATH=./dashboard
+    depends_on:
+      - jaeger
+      - inventory-service
+      - payment-service
+    networks:
+      - tracing-net
+
+  # ========================
+  # Inventory Service — Check Stock (port 3002)
+  # ========================
+  inventory-service:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: inventory-service
+    container_name: inventory-service
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - OTEL_SERVICE_NAME=inventory-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - TRACING_PATH=./shared/tracing
+    depends_on:
+      - jaeger
+    networks:
+      - tracing-net
+
+  # ========================
+  # Payment Service — Process Payment (port 3003)
+  # ========================
+  payment-service:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: payment-service
+    container_name: payment-service
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - OTEL_SERVICE_NAME=payment-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - TRACING_PATH=./shared/tracing
+    depends_on:
+      - jaeger
+    networks:
+      - tracing-net
+
+  # ========================
+  # Dashboard Service — Visual Interface (port 4000)
+  # ========================
+  dashboard:
+    build:
+      context: .
+      args:
+        SERVICE_DIR: dashboard-service
+    container_name: dashboard
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - ORDER_URL=http://order-service:3001
+      - INVENTORY_URL=http://inventory-service:3002
+      - PAYMENT_URL=http://payment-service:3003
+    depends_on:
+      - order-service
+      - inventory-service
+      - payment-service
+      - jaeger
+    networks:
+      - tracing-net
+
+networks:
+  tracing-net:
+    driver: bridge
