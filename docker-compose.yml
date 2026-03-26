@@ -84,29 +84,6 @@ services:
     networks:
       - tracing-net
 
-  # ========================
-  # Dashboard Service — Visual Interface (port 4000)
-  # ========================
-  dashboard:
-    build:
-      context: .
-      args:
-        SERVICE_DIR: dashboard-service
-    container_name: dashboard
-    ports:
-      - "4000:4000"
-    environment:
-      - PORT=4000
-      - ORDER_URL=http://order-service:3001
-      - INVENTORY_URL=http://inventory-service:3002
-      - PAYMENT_URL=http://payment-service:3003
-    depends_on:
-      - order-service
-      - inventory-service
-      - payment-service
-      - jaeger
-    networks:
-      - tracing-net
 
 networks:
   tracing-net:
